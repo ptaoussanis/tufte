@@ -1,9 +1,10 @@
 (ns taoensso.tufte-tests
   (:require
-   [clojure.test    :as test  :refer [is]]
-   [taoensso.tufte  :as tufte :refer [profiled profile p]]
-   [taoensso.encore :as enc]
-   [clojure.string  :as str])
+   [clojure.test        :as test  :refer [is]]
+   [taoensso.tufte      :as tufte :refer [profiled profile p]]
+   [taoensso.tufte.impl :as impl]
+   [taoensso.encore     :as enc]
+   [clojure.string      :as str])
   (:import [taoensso.tufte.impl PState PData PStats]))
 
 (comment
@@ -209,6 +210,27 @@
       (is (= (get-in @ps3 [:stats :bar :n])  60))
       (is (= (get-in @ps3 [:stats :tufte/compaction :n]) 20)) ; Merging does uncounted compaction
       )))
+
+(defn pstats-time-span
+  [t0 t1]
+  (let [pd (PData. 1e8 t0 (PState. nil nil nil))]
+    (PStats. pd t1 (delay (impl/deref-pstats pd t1)))))
+
+(test/deftest merge-clock-events
+  (test/testing "Merge discrete events"
+    (is (= 13 (get-in @(tufte/merge-pstats (pstats-time-span 0 6) (pstats-time-span 10 17)) [:clock :total])))
+    (is (= 5 (get-in @(tufte/merge-pstats (pstats-time-span 1 3) (pstats-time-span 3 6)) [:clock :total]))))
+  (test/testing "Merge overlapping events"
+    (is (= 9 (get-in @(tufte/merge-pstats (pstats-time-span 1 10) (pstats-time-span 3 6)) [:clock :total])))
+    (is (= 11 (get-in @(tufte/merge-pstats (pstats-time-span 0 10) (pstats-time-span 7 11)) [:clock :total])))
+    (is (= 15 ; TODO: Actually 16 is the correct answer. The time union strategy is an approximation
+           (-> (reduce tufte/merge-pstats [(pstats-time-span 10 14)
+                                           (pstats-time-span 4 18)
+                                           (pstats-time-span 19 20)
+                                           (pstats-time-span 19 20)
+                                           (pstats-time-span 13 20)])
+               (deref)
+               (get-in [:clock :total]))))))
 
 (defn add-test-handler! []
   (let [p (promise)]

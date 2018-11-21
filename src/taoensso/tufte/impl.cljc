@@ -62,7 +62,7 @@
 
 (comment (enc/qb 1e6 (new-pdata-local 10) (new-pdata-dynamic 10))) ; [98.18 138.28]
 
-(declare ^:private deref-pstats)
+(declare deref-pstats)
 (defn- deref-pdata "PData->PStats" [^PData pd]
   ;; NB (.-acc pd) should never be mutated from this point!
   (let [t1 (enc/now-nano*)]
@@ -131,7 +131,7 @@
     (mt-add mt (Time. :foo 2))
     (times-into-id-times {:foo '(1)} mt)))
 
-(defn- deref-pstats
+(defn deref-pstats
   "PStats->{:clock _ :stats {<id> <stats/stats>}} (API output)"
   [^PData pd ^long t1]
   (let [t0      (.-t0      pd)
@@ -157,6 +157,15 @@
 (defn- fast-into [c0 c1] (if (> (count c0) (count c1)) (into c0 c1) (into c1 c0)))
 (comment (fast-into nil nil))
 
+; Based on https://codereview.stackexchange.com/a/126927
+(defn time-union [^long a-t0 ^long a-t1 ^long b-t0 ^long b-t1]
+  (if (< b-t0 a-t0)
+    (recur b-t0 b-t1 a-t0 a-t1)
+    (+ (- a-t1 a-t0)
+       (if (> b-t1 a-t1)
+         (- b-t1 (Math/max b-t0 a-t1))
+         0))))
+
 (defn merge-pstats "Compacting merge"
   ([     ps0 ps1] (merge-pstats nil ps0 ps1))
   ([nmax ps0 ps1]
@@ -173,8 +182,10 @@
              pd1-t0 (.-t0 pd1)
              ps1-t1 (.-t1 ps1)
 
-             pd2-t0 (if (< pd0-t0 pd1-t0) pd0-t0 pd1-t0)
+             time-spent (time-union pd0-t0 ps0-t1 pd1-t0 ps1-t1)
+
              ps2-t1 (if (> ps0-t1 ps1-t1) ps0-t1 ps1-t1)
+             pd2-t0 (- ps2-t1 time-spent)
 
              ^PState pd0-pstate (enc/force-ref (.-pstate_ pd0))
              ^PState pd1-pstate (enc/force-ref (.-pstate_ pd1))

@@ -5,7 +5,7 @@
    [taoensso.tufte.impl :as impl]
    [taoensso.encore     :as enc]
    [clojure.string      :as str])
-  (:import [taoensso.tufte.impl PState PData PStats]))
+  (:import [taoensso.tufte.impl PState PData PStats TimeSpan]))
 
 (comment
   (remove-ns      'taoensso.tufte-tests)
@@ -213,8 +213,9 @@
 
 (defn pstats-time-span
   [t0 t1]
-  (let [pd (PData. 1e8 t0 (PState. nil nil nil))]
-    (PStats. pd t1 (delay (impl/deref-pstats pd t1)))))
+  (let [pd (PData. 1e8 t0 (PState. nil nil nil))
+        time-span [(TimeSpan. t0 t1)]]
+    (PStats. pd t1 time-span (delay (impl/deref-pstats pd t1 time-span)))))
 
 (test/deftest merge-clock-events
   (test/testing "Merge discrete events"
@@ -223,7 +224,7 @@
   (test/testing "Merge overlapping events"
     (is (= 9 (get-in @(tufte/merge-pstats (pstats-time-span 1 10) (pstats-time-span 3 6)) [:clock :total])))
     (is (= 11 (get-in @(tufte/merge-pstats (pstats-time-span 0 10) (pstats-time-span 7 11)) [:clock :total])))
-    (is (= 15 ; TODO: Actually 16 is the correct answer. The time union strategy is an approximation
+    (is (= 16
            (-> (reduce tufte/merge-pstats [(pstats-time-span 10 14)
                                            (pstats-time-span 4 18)
                                            (pstats-time-span 19 20)

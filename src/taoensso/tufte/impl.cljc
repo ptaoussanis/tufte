@@ -198,10 +198,10 @@
 
 (defn merge-time-span
   [nmax t1 ts0 ts1]
-  (if (<= (+ (count ts0) (count ts1)) nmax)
-    (fast-into ts0 ts1)
-    (let [time-spent (time-union (fast-into ts0 ts1))]
-      [(TimeSpan. (- t1 time-spent) t1)])))
+  (if (> (+ (count ts0) (count ts1)) nmax)
+    (let [time-spent (time-union (reduce conj ts0 ts1))]
+      [(TimeSpan. (- t1 time-spent) t1)])
+    (reduce conj ts0 ts1)))
 
 (defn merge-pstats "Compacting merge"
   ([     ps0 ps1] (merge-pstats nil ps0 ps1))

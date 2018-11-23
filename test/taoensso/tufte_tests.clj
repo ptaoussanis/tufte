@@ -213,7 +213,7 @@
 
 (defn pstats-time-span
   [t0 t1]
-  (let [pd (PData. 1e8 t0 (PState. nil nil nil))
+  (let [pd (PData. 8e5 t0 (PState. nil nil nil))
         time-span [(TimeSpan. t0 t1)]]
     (PStats. pd t1 time-span (delay (impl/deref-pstats pd t1 time-span)))))
 
@@ -232,6 +232,16 @@
                                            (pstats-time-span 13 20)])
                (deref)
                (get-in [:clock :total]))))))
+
+(comment
+  (time (-> (time (reduce (fn [o v]
+                            (impl/merge-time-span 8e5 (+ 10 v) o [(TimeSpan. v (+ 10 v))]))
+                          [(TimeSpan. 0 10)]
+                          (drop 1 (range 1e7))))
+            (impl/time-union))) ; about 3200 ms => 320 ns per iteration
+    (time (-> (time (reduce tufte/merge-pstats (map #(pstats-time-span % (+ % 10)) (range 1e7))))
+              (deref)
+              (get-in [:clock :total])))) ; about 5000 ms => 500 ns per iteration
 
 (defn add-test-handler! []
   (let [p (promise)]

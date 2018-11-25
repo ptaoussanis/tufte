@@ -233,6 +233,53 @@
 
 (comment (add-basic-println-handler! {}))
 
+(declare merge-pstats)
+
+(defn add-aggregate-window-handler
+  "Adds a handler that aggregates profiling stats and calls `drain-fn` when the
+  aggregate spans `n` seconds.
+
+  After `drain-fn` is invoked, the aggregate is reset, and thus subsequent aggregate
+  data is disjoint from any previous aggregate data."
+  [{:keys [ns-pattern
+           n
+           drain-fn]
+    :or   {ns-pattern  "*"
+           n           300
+           drain-fn (fn [pstats] (println (format-pstats pstats stats/all-format-columns)))}}]
+  (let [pstats-state (atom nil)
+        start-time (atom (enc/now-nano*))
+        n (* n 1e9)]
+    (add-handler!
+      :aggregate-window-handler
+      ns-pattern
+      (fn [m]
+        (let [{:keys [^PStats pstats]} m
+              t1 (.-t1 pstats)
+              time-spent (- t1 @start-time)]
+          (if (>= time-spent n)
+            ; drain buffer
+            (let [full-window (merge-pstats @pstats-state pstats)]
+              (reset! pstats-state nil)
+              (reset! start-time t1)
+              (drain-fn full-window))
+            ; common case: Aggregate pstats
+            (swap! pstats-state (fn [s] (merge-pstats s pstats)))))))))
+
+(comment
+  (do
+    (add-aggregate-window-handler {:n 1})
+
+    (profile {:id :foo1} (p :foo (Thread/sleep 100)))
+    (Thread/sleep 900)
+    (profile {:id :foo2} (p :foo (Thread/sleep 100)))
+
+    (profile {:id :bar1} (p :bar (Thread/sleep 500)))
+    (profile {:id :bar2} (p :bar (Thread/sleep 550)))
+
+    (profile {:id :foobar} (p :foobar (Thread/sleep 1100)))
+    ))
+
 ;;;; Some low-level primitives
 
 (defn profiling? "Returns e/o #{nil :thread :dynamic}."

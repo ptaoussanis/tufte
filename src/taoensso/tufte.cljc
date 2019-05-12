@@ -36,15 +36,17 @@
      (:require
       [taoensso.encore      :as enc]
       [taoensso.tufte.stats :as stats]
-      [taoensso.tufte.impl  :as impl]))
+      [taoensso.tufte.impl  :as impl]
+      [amalloy.ring-buffer  :as ring-buffer]))
 
-  #?(:clj (:import [taoensso.tufte.impl PStats]))
+  #?(:clj (:import [taoensso.tufte.impl PStats PData]))
 
   #?(:cljs
      (:require
       [taoensso.encore      :as enc  :refer-macros []]
       [taoensso.tufte.stats :as stats]
-      [taoensso.tufte.impl  :as impl :refer [PStats]]))
+      [taoensso.tufte.impl  :as impl :refer [PStats PData]]
+      [amalloy.ring-buffer  :as ring-buffer]))
 
   #?(:cljs (:require-macros [taoensso.tufte :refer [profiled]])))
 
@@ -665,6 +667,31 @@
 ;;;; Stats accumulators (experimental)
 ;; TODO Document use
 
+(defn- sacc-add-n!             [n pstats_ group-id ps]
+  (when (and group-id ps)
+    (swap! pstats_ (fn [m] (update m group-id (fn [old-value]
+                                                (conj (or old-value (ring-buffer/ring-buffer n)) ps)))))
+    true))
+
+(defn- sacc-sort-and-merge! [pstats_]
+  (reduce-kv
+    (fn [m group-id pstats-list]
+      (assoc m
+        group-id
+        (reduce impl/merge-pstats
+                (sort-by (fn [^PStats p] (.-t0 ^PData (.-pd p))) pstats-list))))
+    {}
+    @pstats_))
+
+(deftype StatsAccumulatorN [n pstats_] ; {<group-id> [<pstats> ...]}
+  #?@(:clj  [clojure.lang.IFn  (invoke [_ group-id ps] (sacc-add-n! n pstats_ group-id ps))]
+      :cljs [             IFn (-invoke [_ group-id ps] (sacc-add-n! n pstats_ group-id ps))])
+  #?@(:clj  [clojure.lang.IDeref  (deref [_] (sacc-sort-and-merge! pstats_))]
+      :cljs [             IDeref (-deref [_] (sacc-sort-and-merge! pstats_))]))
+
+(defn stats-accumulator-n [n]
+  (StatsAccumulatorN. n (atom {})))
+
 (defn- sacc-drain-and-merge! [pstats_] (enc/reset-in! pstats_ {}))
 (defn- sacc-add!             [pstats_ group-id ps]
   (when (and group-id ps)
@@ -699,6 +726,30 @@
     (Thread/sleep 100)
     (sacc :profiled2 (second (profiled {} (p :p2))))
     [@sacc @sacc]))
+
+(defn add-accumulating-n-handler!
+  [{:keys [ns-pattern handler-id n]
+    :or   {handler-id :accumulating-n
+           n          100}}]
+  (let [sacc   (stats-accumulator-n n)
+        agent_ #?(:clj (delay (agent nil :error-mode :continue)) :cljs nil)]
+
+    (add-handler! handler-id ns-pattern
+                  (fn [{:keys [?id ?data pstats]}]
+                    (let [id (or ?id :tufte/nil-id)]
+                      #?(:clj (send @agent_ (fn [_] (sacc id pstats)))
+                         :cljs                     (sacc id pstats)))))
+
+    sacc))
+
+(comment
+  (do
+    (def my-sacc (add-accumulating-n-handler! {:n 5}))
+    (->> (range 1 (inc 10))
+         (map (fn [x] (future (profile {} (p :p1 (Thread/sleep (* x 100)))))))
+         (mapv deref))
+    (println (format-grouped-pstats @my-sacc
+                                    {:format-pstats-opts {:columns [:n-calls :min :mean :max :total :clock]}}))))
 
 (defn add-accumulating-handler!
   "Experimental, subject to change!
@@ -853,6 +904,6 @@
   (let [[_ ps1] (profiled {} (p :foo (Thread/sleep 100)))
         _ (Thread/sleep 500)
         [_ ps2] (profiled {} (p :foo (Thread/sleep 100)))]
-    (println (format-pstats (merge-pstats ps2 ps1)))
+    (println (format-pstats (merge-pstats ps2 ps1)))))
     ;;@(merge-pstats ps2 ps1)
-    ))
+

@@ -12,7 +12,8 @@
 
   :dependencies
   [[org.clojure/clojure "1.7.0"]
-   [com.taoensso/encore "2.106.0"]]
+   [com.taoensso/encore "2.106.0"]
+   [amalloy/ring-buffer "1.3.0"]]
 
   :plugins
   [[lein-pprint    "1.2.0"]

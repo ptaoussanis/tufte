@@ -12,3 +12,8 @@ pom.xml*
 /logs/
 /docs/
 /doc/
+.idea/
+*.iml
+cljs-example/main.js
+cljs-example/out/
+cljs-example/.cpcache/

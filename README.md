@@ -11,9 +11,7 @@
 
 > See [here](https://taoensso.com/clojure/backers) if you're interested in helping support my open-source work, thanks! - Peter Taoussanis
 
-# Tufte
-
-### Simple profiling and performance monitoring for Clojure/Script
+# Tufte: simple profiling and performance monitoring for Clojure/Script
 
 ![Hero]
 
@@ -65,7 +63,8 @@
 Add the necessary dependency to your project:
 
 ```clojure
-[com.taoensso/tufte "2.2.0"]
+Leiningen: [com.taoensso/tufte "2.2.0"] ; or
+deps.edn:   com.taoensso/tufte {:mvn/version "2.2.0"}
 ```
 
 And setup your namespace imports:

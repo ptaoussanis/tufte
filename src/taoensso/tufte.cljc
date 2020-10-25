@@ -340,6 +340,11 @@
   "Note: this is a low-level primitive for advanced users!
   Enables `p` forms in body and returns body's result.
 
+  If `:dynamic?` is false (default), body's evaluation MUST begin
+  and end without interruption on the same thread. In particular
+  this means that body MUST NOT contain any parking `core.async`
+  calls.
+
   See `new-pdata` for more info on low-level primitives."
   [pdata {:keys [dynamic? nmax] :or {nmax default-nmax}} & body]
   (if dynamic?
@@ -403,23 +408,45 @@
        :nmax     - ~Max captures per id before compaction ; Default is 8e5
        :when     - Optional arbitrary conditional form (e.g. boolean expr)
 
-     Async code:
+     Laziness in body:
+       Lazy seqs and other forms of laziness (e.g. delays) in body will only
+       contribute to profiling results if/when EVALUATION ACTUALLY OCCURS.
+       This is intentional and a useful property. Compare:
+
+       (profiled {}  (delay (Thread/sleep 2000))) ; Doesn't count sleep
+       (profiled {} @(delay (Thread/sleep 2000))) ; Does    count sleep
+
+     Async code in body:
        Execution time of any code in body that runs asynchronously on a
        different thread will generally NOT be automatically captured by default.
 
        :dynamic? can be used to support capture in cases where Clojure's
-       binding conveyance applies (e.g. futures, agents, pmap).
+       binding conveyance applies (e.g. futures, agents, pmap). Just make sure
+       that all work you want to capture has COMPLETED before the `profiled`
+       form ends- for example, by blocking on pending futures.
 
        In other advanced cases (notably core.async `go` blocks), please see
        `with-profiling` and `capture-time!`.
 
-     Laziness:
-       Lazy seqs and other forms of laziness (e.g. delays) will only contribute
-       to profiling results if/when evaluation actually occurs.
-       This is intentional and a useful property. Compare:
+     `core.async` warning:
+        `core.async` code can be difficult to profile correctly without a deep
+        understanding of precisely what it's doing under-the-covers.
 
-       (profiled {}  (delay (Thread/sleep 2000))) ; Doesn't count sleep
-       (profiled {} @(delay (Thread/sleep 2000))) ; Does    count sleep"
+        Some general recommendations that can help keep things simple:
+
+          - Try minimize the amount of code + logic in `go` blocks. Use `go`
+            blocks for un/parking to get the data you need, then pass the data
+            to external fns. Profile these fns (or in these fns), not in your
+            `go` blocks.
+
+          - In particular: you MUST NEVER have parking calls inside
+            `(profiled {:dynamic? false} ...)`.
+
+            This can lead to concurrency exceptions.
+
+            If you must profile code within a go block, and you really want to
+            include un/parking times, use `(profiled {:dynamic? true} ...)`
+            instead."
 
      [opts & body]
      (let [ns-str (str *ns*)]
@@ -480,23 +507,45 @@
        :id       - Optional group id provided to handlers (e.g. `::my-stats-1`)
        :data     - Optional arbitrary data provided to handlers
 
-     Async code:
+     Laziness in body:
+       Lazy seqs and other forms of laziness (e.g. delays) in body will only
+       contribute to profiling results if/when EVALUATION ACTUALLY OCCURS.
+       This is intentional and a useful property. Compare:
+
+       (profile {}  (delay (Thread/sleep 2000))) ; Doesn't count sleep
+       (profile {} @(delay (Thread/sleep 2000))) ; Does    count sleep
+
+     Async code in body:
        Execution time of any code in body that runs asynchronously on a
        different thread will generally NOT be automatically captured by default.
 
        :dynamic? can be used to support capture in cases where Clojure's
-       binding conveyance applies (e.g. futures, agents, pmap).
+       binding conveyance applies (e.g. futures, agents, pmap). Just make sure
+       that all work you want to capture has COMPLETED before the `profiled`
+       form ends- for example, by blocking on pending futures.
 
        In other advanced cases (notably core.async `go` blocks), please see
        `with-profiling` and `capture-time!`.
 
-     Laziness:
-       Lazy seqs and other forms of laziness (e.g. delays) will only contribute
-       to profiling results if/when evaluation actually occurs.
-       This is intentional and a useful property. Compare:
+     `core.async` warning:
+        `core.async` code can be difficult to profile correctly without a deep
+        understanding of precisely what it's doing under-the-covers.
 
-       (profiled {}  (delay (Thread/sleep 2000))) ; Doesn't count sleep
-       (profiled {} @(delay (Thread/sleep 2000))) ; Does    count sleep"
+        Some general recommendations that can help keep things simple:
+
+          - Try minimize the amount of code + logic in `go` blocks. Use `go`
+            blocks for un/parking to get the data you need, then pass the data
+            to external fns. Profile these fns (or in these fns), not in your
+            `go` blocks.
+
+          - In particular: you MUST NEVER have parking calls inside
+            `(profiled {:dynamic? false} ...)`.
+
+            This can lead to concurrency exceptions.
+
+            If you must profile code within a go block, and you really want to
+            include un/parking times, use `(profiled {:dynamic? true} ...)`
+            instead."
 
      [opts & body]
      (let [ns-str (str *ns*)]

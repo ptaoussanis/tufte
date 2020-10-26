@@ -11,7 +11,7 @@
                 *assert*             true}
 
   :dependencies
-  [[com.taoensso/encore "3.1.0"]]
+  [[com.taoensso/encore "3.9.1"]]
 
   :plugins
   [[lein-pprint    "1.3.2"]
@@ -32,7 +32,7 @@
    :dev      [:1.10 :test :server-jvm :depr]
    :test     {:dependencies
               [[org.clojure/test.check "1.1.0"]
-               [com.taoensso/timbre "4.10.0"]]}}
+               [com.taoensso/timbre "5.1.0"]]}}
 
   :cljsbuild
   {:test-commands

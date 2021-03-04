@@ -803,7 +803,7 @@
   minutes/etc. to get a view of total-system performance over
   the period, e.g.:
 
-  (defonce my-sacc (add-accumulating-handler! \"*\"))
+  (defonce my-sacc (add-accumulating-handler! {:ns-pattern \"*\"}))
   (defonce my-sacc-drainer
     ;; Will drain and print formatted stats every minute
     (future
@@ -818,7 +818,8 @@
   See also `format-grouped-pstats`, example clj project."
 
   [{:keys [ns-pattern handler-id]
-    :or   {handler-id :accumulating}}]
+    :or   {ns-pattern "*"
+           handler-id :accumulating}}]
 
   (let [sacc   (stats-accumulator)
         agent_ #?(:clj (delay (agent nil :error-mode :continue)) :cljs nil)]
@@ -832,7 +833,7 @@
     sacc))
 
 (comment
-  (def my-sacc (add-accumulating-handler! "*"))
+  (def my-sacc (add-accumulating-handler! {:ns-pattern "*"}))
   (future (profile {}         (p :p1 (Thread/sleep 900))))
   (future (profile {:id :foo} (p :p1 (Thread/sleep 900))))
   (future (profile {:id :bar} (p :p1 (Thread/sleep 500))))
